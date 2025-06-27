@@ -1,0 +1,241 @@
+/* Custom CSS for RioConsoleJSON - Dark Modern Theme */
+:root {
+    --bs-primary: #3b82f6;
+    --bs-secondary: #6b7280;
+    --bs-success: #10b981;
+    --bs-warning: #f59e0b;
+    --bs-info: #06b6d4;
+    --bs-dark: #111827;
+    --bs-darker: #0f172a;
+    --bs-black: #000000;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #111827 !important;
+    color: #f9fafb !important;
+}
+
+/* Custom hover effects */
+.hover-card {
+    transition: all 0.3s ease;
+}
+
+.hover-card:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8) !important;
+}
+
+/* Gradient backgrounds */
+.bg-gradient-dark {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+}
+
+.bg-gradient-darker {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+}
+
+/* Custom navbar styling */
+.navbar-dark .navbar-brand {
+    color: #f9fafb !important;
+    font-weight: 700;
+}
+
+.navbar-dark .navbar-brand:hover {
+    color: var(--bs-primary) !important;
+}
+
+/* Hero section enhancements */
+.hero-section {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+}
+
+/* Custom button hover effects */
+.btn {
+    transition: all 0.3s ease;
+    font-weight: 500;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+    border: none;
+    box-shadow: 0 4px 14px 0 rgba(59, 130, 246, 0.4);
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+    box-shadow: 0 6px 20px 0 rgba(59, 130, 246, 0.6);
+}
+
+.btn-outline-light {
+    border-color: rgba(255, 255, 255, 0.3);
+    backdrop-filter: blur(10px);
+}
+
+.btn-outline-light:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.5);
+    color: #fff;
+}
+
+/* Card enhancements */
+.card {
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.card:hover {
+    border-color: rgba(59, 130, 246, 0.5);
+}
+
+/* Stats section */
+.display-4 {
+    background: linear-gradient(135deg, #3b82f6, #10b981, #f59e0b, #06b6d4);
+    background-size: 300% 300%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: gradientShift 4s ease infinite;
+}
+
+@keyframes gradientShift {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+}
+
+/* Form styling */
+.form-control {
+    background-color: rgba(17, 24, 39, 0.8) !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+    color: #f9fafb !important;
+}
+
+.form-control:focus {
+    background-color: rgba(17, 24, 39, 0.9) !important;
+    border-color: var(--bs-primary) !important;
+    box-shadow: 0 0 0 0.25rem rgba(59, 130, 246, 0.25) !important;
+    color: #f9fafb !important;
+}
+
+.form-control::placeholder {
+    color: rgba(156, 163, 175, 0.8) !important;
+}
+
+/* Badge styling */
+.badge {
+    backdrop-filter: blur(10px);
+}
+
+/* Link hover effects */
+a {
+    transition: all 0.3s ease;
+}
+
+a:hover {
+    color: var(--bs-primary) !important;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #1f2937;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #374151;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #4b5563;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .display-2 {
+        font-size: 2.5rem !important;
+    }
+    
+    .display-5 {
+        font-size: 2rem !important;
+    }
+    
+    .hero-section {
+        min-height: auto;
+        padding: 4rem 0 !important;
+    }
+    
+    .navbar-brand {
+        font-size: 1.2rem !important;
+    }
+}
+
+/* Animation classes */
+.fade-in {
+    animation: fadeIn 1s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.slide-up {
+    animation: slideUp 0.8s ease-out;
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(50px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Background patterns */
+.hero-section::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: 
+        radial-gradient(circle at 20% 20%, rgba(59, 130, 246, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, rgba(16, 185, 129, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 40% 60%, rgba(245, 158, 11, 0.1) 0%, transparent 50%);
+    pointer-events: none;
+}
+
+/* Text effects */
+.text-gradient {
+    background: linear-gradient(135deg, #3b82f6, #10b981);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* Icon styling */
+.bi {
+    transition: all 0.3s ease;
+}
+
+.navbar-brand .bi:hover {
+    transform: rotate(360deg);
+}
+
+/* Loading animation for demo section */
+.demo-loading {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
