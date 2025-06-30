@@ -67,6 +67,13 @@ $routes->group('api/v1', ['namespace' => 'App\Controllers'], function($routes) {
     $routes->get('info', 'ApiController::info');
     $routes->get('health', 'ApiController::health');
     
+    // CORS preflight support for all API endpoints
+    $routes->options('info', 'ApiController::options');
+    $routes->options('health', 'ApiController::options');
+    $routes->options('([a-zA-Z0-9]+)', 'ApiController::options');
+    $routes->options('([a-zA-Z0-9]+)/([a-zA-Z0-9\-]+)', 'ApiController::options');
+    $routes->options('([a-zA-Z0-9]+)/([a-zA-Z0-9\-]+)/raw', 'ApiController::options');
+    
     // User JSON files endpoints
     $routes->get('([a-zA-Z0-9]+)', 'ApiController::getUserFiles/$1');
     $routes->get('([a-zA-Z0-9]+)/([a-zA-Z0-9\-]+)', 'ApiController::getJsonFile/$1/$2');

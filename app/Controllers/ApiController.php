@@ -3,51 +3,141 @@
 namespace App\Controllers;
 
 use CodeIgniter\RESTful\ResourceController;
+use CodeIgniter\Controller;
 use App\Models\ApiKeyModel;
 use App\Models\JsonSiloModel;
 use App\Models\UserModel;
 
-class ApiController extends ResourceController
+class ApiController extends BaseController
 {
-    protected $modelName = 'App\Models\JsonSiloModel';
-    protected $format    = 'json';
+    protected $format = 'json';
     
     protected $apiKeyModel;
     protected $userModel;
+    protected $startTime;
     
     // Rate limiting storage (in production, use Redis or database)
     private static $requestCounts = [];
     
-    public function __construct()
+    
+    public function initController(\CodeIgniter\HTTP\RequestInterface $request, \CodeIgniter\HTTP\ResponseInterface $response, \Psr\Log\LoggerInterface $logger)
     {
+        // Do Not Edit This Line
+        parent::initController($request, $response, $logger);
+        
+        // Initialize properties
+        $this->startTime = microtime(true);
+        
+        // Initialize models
         $this->apiKeyModel = new ApiKeyModel();
         $this->userModel = new UserModel();
+        
+        // Load helpers
         helper(['url', 'form']);
     }
     
     /**
-     * Set security headers and CORS policy
+     * Common API setup - headers, CORS, and initial validation
+     */
+    private function setupApiResponse(): void
+    {
+        // Set all security and CORS headers
+        $this->setSecurityHeaders();
+        
+        // Reset start time for this specific request
+        $this->startTime = microtime(true);
+        
+        // Add server timing header
+        $this->response->setHeader('Server-Timing', 'app;desc="API Processing"');
+    }
+    
+    /**
+     * Set comprehensive security headers and CORS policy
      */
     private function setSecurityHeaders(): void
     {
-        // Security headers
+        // Ensure response object is available
+        if (!$this->response) {
+            $this->response = service('response');
+        }
+        
+        // Essential Security Headers
         $this->response->setHeader('X-Content-Type-Options', 'nosniff');
         $this->response->setHeader('X-Frame-Options', 'DENY');
         $this->response->setHeader('X-XSS-Protection', '1; mode=block');
         $this->response->setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-        $this->response->setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-        $this->response->setHeader('Content-Security-Policy', 'default-src \'none\'; script-src \'none\'; object-src \'none\'; base-uri \'none\';');
+        $this->response->setHeader('X-Permitted-Cross-Domain-Policies', 'none');
+        $this->response->setHeader('X-Download-Options', 'noopen');
         
-        // CORS headers (restrictive for security)
-        $this->response->setHeader('Access-Control-Allow-Origin', '*');
-        $this->response->setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-        $this->response->setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
-        $this->response->setHeader('Access-Control-Max-Age', '3600');
+        // Enhanced Security Headers
+        if ($this->request->isSecure() || ENVIRONMENT === 'production') {
+            $this->response->setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+        }
         
-        // Cache control to prevent sensitive data caching
-        $this->response->setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        // API-specific Content Security Policy
+        $this->response->setHeader('Content-Security-Policy', 
+            "default-src 'none'; " .
+            "script-src 'none'; " .
+            "object-src 'none'; " .
+            "base-uri 'none'; " .
+            "form-action 'none'; " .
+            "frame-ancestors 'none';"
+        );
+        
+        // CORS headers with improved configuration
+        $this->setCorsHeaders();
+        
+        // Cache control for API responses
+        $this->response->setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private, max-age=0');
         $this->response->setHeader('Pragma', 'no-cache');
         $this->response->setHeader('Expires', '0');
+        
+        // API Information Headers
+        $this->response->setHeader('API-Version', '1.0.0');
+        $this->response->setHeader('Server', 'RioJSON-API');
+        $this->response->setHeader('X-API-RateLimit-Policy', 'user-based');
+        
+        // Content-Type for API responses
+        $this->response->setHeader('Content-Type', 'application/json; charset=UTF-8');
+        $this->response->setHeader('Vary', 'Accept, Authorization, Origin');
+    }
+    
+    /**
+     * Set CORS headers with improved handling
+     */
+    private function setCorsHeaders(): void
+    {
+        $origin = $this->request->getHeaderLine('Origin');
+        $method = $this->request->getMethod();
+        
+        // Handle preflight requests
+        if ($method === 'OPTIONS') {
+            $this->response->setHeader('Access-Control-Allow-Origin', '*');
+            $this->response->setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD');
+            $this->response->setHeader('Access-Control-Allow-Headers', 
+                'Authorization, Content-Type, Accept, Origin, X-Requested-With, ' .
+                'Access-Control-Request-Method, Access-Control-Request-Headers, ' .
+                'X-API-Key, Cache-Control'
+            );
+            $this->response->setHeader('Access-Control-Max-Age', '86400'); // 24 hours
+        } else {
+            // For actual requests, be more restrictive if needed
+            $this->response->setHeader('Access-Control-Allow-Origin', '*');
+        }
+        
+        // Headers to expose to the client
+        $this->response->setHeader('Access-Control-Expose-Headers', 
+            'X-RateLimit-Remaining-Hourly, X-RateLimit-Limit-Hourly, ' .
+            'X-RateLimit-Remaining-Burst, X-RateLimit-Limit-Burst, ' .
+            'X-RateLimit-Reset-Hourly, X-RateLimit-Reset-Burst, ' .
+            'API-Version, Content-Length, X-Response-Time'
+        );
+        
+        // Credentials policy
+        $this->response->setHeader('Access-Control-Allow-Credentials', 'false');
+        
+        // Vary header for proper caching
+        $this->response->setHeader('Vary', 'Accept, Authorization, Origin');
     }
     
     /**
@@ -267,22 +357,35 @@ class ApiController extends ResourceController
     }
     
     /**
-     * Return error response
+     * Return error response with headers
      */
     private function errorResponse(string $message, int $code = 400): \CodeIgniter\HTTP\ResponseInterface
     {
+        // Add response time header if available
+        if (isset($this->startTime)) {
+            $responseTime = round((microtime(true) - $this->startTime) * 1000, 2);
+            $this->response->setHeader('X-Response-Time', $responseTime . 'ms');
+        }
+        
         return $this->response->setStatusCode($code)->setJSON([
             'error' => true,
             'message' => $message,
+            'code' => $code,
             'timestamp' => date('c')
         ]);
     }
     
     /**
-     * Return success response
+     * Return success response with headers
      */
     private function successResponse($data, string $message = 'Success'): \CodeIgniter\HTTP\ResponseInterface
     {
+        // Add response time header if available
+        if (isset($this->startTime)) {
+            $responseTime = round((microtime(true) - $this->startTime) * 1000, 2);
+            $this->response->setHeader('X-Response-Time', $responseTime . 'ms');
+        }
+        
         return $this->response->setJSON([
             'success' => true,
             'message' => $message,
@@ -449,10 +552,9 @@ class ApiController extends ResourceController
      */
     public function getJsonFile($userId = null, $fileId = null)
     {
+        // Setup API response with headers and timing
+        $this->setupApiResponse();
         $startTime = microtime(true);
-        
-        // Set security headers
-        $this->setSecurityHeaders();
         
         // Validate request security
         if (!$this->validateRequestSecurity()) {
@@ -554,10 +656,9 @@ class ApiController extends ResourceController
      */
     public function getUserFiles($userId = null)
     {
+        // Setup API response with headers and timing
+        $this->setupApiResponse();
         $startTime = microtime(true);
-        
-        // Set security headers
-        $this->setSecurityHeaders();
         
         // Validate request security
         if (!$this->validateRequestSecurity()) {
@@ -646,8 +747,8 @@ class ApiController extends ResourceController
      */
     public function getRawJson($userId = null, $fileId = null)
     {
-        // Set security headers
-        $this->setSecurityHeaders();
+        // Setup API response with headers and timing
+        $this->setupApiResponse();
         
         // Validate request security
         if (!$this->validateRequestSecurity()) {
@@ -703,9 +804,13 @@ class ApiController extends ResourceController
                 return $this->errorResponse('Invalid JSON content in file', 500);
             }
             
-            // Return raw JSON with proper content type
+            // Return raw JSON with proper content type and headers
+            $responseTime = round((microtime(true) - $this->startTime) * 1000, 2);
+            $this->response->setHeader('X-Response-Time', $responseTime . 'ms');
+            $this->response->setHeader('Content-Disposition', 'inline; filename="' . $file['original_filename'] . '"');
+            
             return $this->response
-                        ->setContentType('application/json')
+                        ->setContentType('application/json; charset=UTF-8')
                         ->setBody($file['json_content']);
                         
         } catch (\Exception $e) {
@@ -719,8 +824,8 @@ class ApiController extends ResourceController
      */
     public function info()
     {
-        // Set security headers
-        $this->setSecurityHeaders();
+        // Setup API response with headers and timing
+        $this->setupApiResponse();
         
         return $this->successResponse([
             'name' => 'RioConsoleJSON API',
@@ -763,8 +868,8 @@ class ApiController extends ResourceController
      */
     public function health()
     {
-        // Set security headers
-        $this->setSecurityHeaders();
+        // Setup API response with headers and timing
+        $this->setupApiResponse();
         
         return $this->successResponse([
             'status' => 'healthy',
@@ -774,13 +879,23 @@ class ApiController extends ResourceController
     }
     
     /**
-     * Handle CORS preflight requests
+     * Handle CORS preflight requests (OPTIONS)
      */
     public function options()
     {
-        // Set security headers
-        $this->setSecurityHeaders();
+        // Setup API response with headers and timing
+        $this->setupApiResponse();
         
-        return $this->response->setStatusCode(200);
+        // Log preflight request for monitoring
+        $origin = $this->request->getHeaderLine('Origin');
+        $method = $this->request->getHeaderLine('Access-Control-Request-Method');
+        $headers = $this->request->getHeaderLine('Access-Control-Request-Headers');
+        
+        log_message('info', "CORS Preflight: Origin={$origin}, Method={$method}, Headers={$headers}");
+        
+        // Return successful preflight response
+        return $this->response
+            ->setStatusCode(200)
+            ->setBody(''); // Empty body for preflight
     }
 }
