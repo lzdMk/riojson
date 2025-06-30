@@ -852,12 +852,7 @@ class ApiController extends BaseController
                     'daily_limit' => 10000,
                     'burst_limit' => 100
                 ],
-                'admin_users' => [
-                    'requests_per_hour' => 'unlimited',
-                    'daily_limit' => 'unlimited',
-                    'burst_limit' => 'unlimited'
-                ],
-                'note' => 'Rate limits vary by user type. Admin users have unlimited access.'
+                'note' => 'Rate limits vary by user type.'
             ]
         ], 'API information');
     }

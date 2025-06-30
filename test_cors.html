@@ -84,7 +84,12 @@
         
         <div class="test-section guide-section">
             <h3>🌐 API Configuration</h3>
-            <p><strong>API Base URL:</strong> <span id="api-base-display"></span></p>
+            <form id="api-base-form" onsubmit="event.preventDefault(); setApiBaseUrl();">
+                <label for="api-base-input"><strong>API Base URL:</strong></label>
+                <input type="text" id="api-base-input" style="width: 350px; padding: 8px; margin: 5px;" placeholder="e.g. https://api.example.com/riojson">
+                <button type="submit">Set Base URL</button>
+            </form>
+            <p><strong>Current API Base URL:</strong> <span id="api-base-display"></span></p>
             <button onclick="testConnection()">🔗 Test API Connection</button>
             <div id="connection-result" class="result"></div>
         </div>
@@ -154,8 +159,31 @@
     </div>
 
     <script>
-        // Set the correct API base URL
-        const API_BASE = 'http://localhost/riojson';  // Fixed URL instead of dynamic detection
+        // API Base URL logic with localStorage
+        function getApiBaseUrl() {
+            return localStorage.getItem('riojson_api_base') || 'http://localhost/riojson';
+        }
+
+        function setApiBaseUrl() {
+            const input = document.getElementById('api-base-input').value.trim();
+            if (input) {
+                localStorage.setItem('riojson_api_base', input);
+                updateApiBaseDisplay();
+            }
+        }
+
+        function updateApiBaseDisplay() {
+            const base = getApiBaseUrl();
+            document.getElementById('api-base-display').textContent = base;
+            document.getElementById('api-base-input').value = base;
+        }
+
+        let API_BASE = getApiBaseUrl();
+
+        // Watch for changes to base URL
+        function refreshApiBase() {
+            API_BASE = getApiBaseUrl();
+        }
 
         function displayResult(elementId, data, isError = false) {
             const element = document.getElementById(elementId);
@@ -220,9 +248,9 @@
         }
 
         async function testHealth() {
+            refreshApiBase();
             const url = `${API_BASE}/api/v1/health`;
             console.log('Testing URL:', url);
-            
             try {
                 const response = await fetch(url, {
                     method: 'GET',
@@ -230,14 +258,11 @@
                         'Accept': 'application/json',
                     }
                 });
-                
                 console.log('Response status:', response.status);
                 console.log('Response headers:', response.headers);
-                
                 const data = await response.json();
                 displayResult('health-result', data);
                 displayHeaders('health-headers', response);
-                
             } catch (error) {
                 console.error('Health test error:', error);
                 displayResult('health-result', `Error: ${error.message}\nURL tested: ${url}`, true);
@@ -245,6 +270,7 @@
         }
 
         async function testInfo() {
+            refreshApiBase();
             try {
                 const response = await fetch(`${API_BASE}/api/v1/info`, {
                     method: 'GET',
@@ -252,17 +278,16 @@
                         'Accept': 'application/json',
                     }
                 });
-                
                 const data = await response.json();
                 displayResult('info-result', data);
                 displayHeaders('info-headers', response);
-                
             } catch (error) {
                 displayResult('info-result', `Error: ${error.message}`, true);
             }
         }
 
         async function testPreflight() {
+            refreshApiBase();
             try {
                 const response = await fetch(`${API_BASE}/api/v1/info`, {
                     method: 'OPTIONS',
@@ -272,29 +297,25 @@
                         'Origin': window.location.origin
                     }
                 });
-                
                 displayResult('preflight-result', `Status: ${response.status} ${response.statusText}\nPreflight successful!`);
                 displayHeaders('preflight-headers', response);
-                
             } catch (error) {
                 displayResult('preflight-result', `Error: ${error.message}`, true);
             }
         }
 
         async function testUserFiles() {
+            refreshApiBase();
             const apiKey = document.getElementById('api-key').value;
             const userId = document.getElementById('user-id').value;
-            
             if (!apiKey || !userId) {
                 displayResult('user-files-result', 'Please enter both API key and User ID', true);
                 return;
             }
-
             const url = `${API_BASE}/api/v1/${userId}`;
             console.log('Testing URL:', url);
             console.log('API Key:', apiKey);
             console.log('User ID:', userId);
-
             try {
                 const response = await fetch(url, {
                     method: 'GET',
@@ -304,14 +325,11 @@
                         'Content-Type': 'application/json'
                     }
                 });
-                
                 console.log('Response status:', response.status);
                 console.log('Response content type:', response.headers.get('content-type'));
-                
                 const data = await response.json();
                 displayResult('user-files-result', data, !response.ok);
                 displayHeaders('user-files-headers', response);
-                
             } catch (error) {
                 console.error('User files test error:', error);
                 displayResult('user-files-result', `Error: ${error.message}\nURL tested: ${url}`, true);
@@ -319,18 +337,16 @@
         }
 
         async function testSpecificFile() {
+            refreshApiBase();
             const apiKey = document.getElementById('api-key-file').value;
             const userId = document.getElementById('user-id-file').value;
             const fileId = document.getElementById('file-id').value;
-            
             if (!apiKey || !userId || !fileId) {
                 displayResult('file-result', 'Please enter API key, User ID, and File ID', true);
                 return;
             }
-
             const url = `${API_BASE}/api/v1/${userId}/${fileId}`;
             console.log('Testing URL:', url);
-
             try {
                 const response = await fetch(url, {
                     method: 'GET',
@@ -340,13 +356,10 @@
                         'Content-Type': 'application/json'
                     }
                 });
-                
                 console.log('Response status:', response.status);
-                
                 const data = await response.json();
                 displayResult('file-result', data, !response.ok);
                 displayHeaders('file-headers', response);
-                
             } catch (error) {
                 console.error('Specific file test error:', error);
                 displayResult('file-result', `Error: ${error.message}\nURL tested: ${url}`, true);
@@ -354,18 +367,16 @@
         }
 
         async function testRawFile() {
+            refreshApiBase();
             const apiKey = document.getElementById('api-key-file').value;
             const userId = document.getElementById('user-id-file').value;
             const fileId = document.getElementById('file-id').value;
-            
             if (!apiKey || !userId || !fileId) {
                 displayResult('file-result', 'Please enter API key, User ID, and File ID', true);
                 return;
             }
-
             const url = `${API_BASE}/api/v1/${userId}/${fileId}/raw`;
             console.log('Testing URL:', url);
-
             try {
                 const response = await fetch(url, {
                     method: 'GET',
@@ -374,9 +385,7 @@
                         'Accept': 'application/json'
                     }
                 });
-                
                 console.log('Response status:', response.status);
-                
                 // For raw endpoint, we get the JSON directly
                 const data = await response.text();
                 let parsedData;
@@ -387,16 +396,15 @@
                     displayResult('file-result', `Raw Response:\n${data}`, !response.ok);
                 }
                 displayHeaders('file-headers', response);
-                
             } catch (error) {
                 console.error('Raw file test error:', error);
                 displayResult('file-result', `Error: ${error.message}\nURL tested: ${url}`, true);
             }
         }
 
-        // Auto-test health on page load
+        // Auto-setup on page load
         window.onload = function() {
-            document.getElementById('api-base-display').textContent = API_BASE;
+            updateApiBaseDisplay();
             testHealth();
         };
     </script>
