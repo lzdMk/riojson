@@ -317,13 +317,13 @@ class ApiController extends BaseController
         // Sanitize input
         $userId = trim($userId);
         
-        // Check basic format (6 alphanumeric characters)
-        if (!preg_match('/^[a-zA-Z0-9]{6}$/', $userId)) {
+        // Check basic format (allow alphanumeric and underscores, 3-20 chars)
+        if (!preg_match('/^[a-zA-Z0-9_]{3,20}$/', $userId)) {
             return false;
         }
         
         // Additional security: prevent SQL injection patterns
-        if (preg_match('/[\'";\\\\%_]/', $userId)) {
+        if (preg_match('/[\'";\\\\%]/', $userId)) {
             return false;
         }
         
@@ -338,8 +338,8 @@ class ApiController extends BaseController
         // Sanitize input
         $fileId = trim($fileId);
         
-        // Check basic format (11 alphanumeric with hyphens)
-        if (!preg_match('/^[a-zA-Z0-9\-]{11}$/', $fileId)) {
+        // Check basic format (allow alphanumeric, hyphens, and underscores, 3-50 chars)
+        if (!preg_match('/^[a-zA-Z0-9\-_]{3,50}$/', $fileId)) {
             return false;
         }
         
@@ -349,7 +349,7 @@ class ApiController extends BaseController
         }
         
         // Prevent SQL injection patterns
-        if (preg_match('/[\'";\\\\%_]/', $fileId)) {
+        if (preg_match('/[\'";\\\\%]/', $fileId)) {
             return false;
         }
         
@@ -521,19 +521,19 @@ class ApiController extends BaseController
     /**
      * Log API request for live monitoring
      */
-    private function logApiRequest($userType, $userEmail, $endpoint, $method, $status, $responseTime, $rateLimitHit = false): void
+    private function logApiRequest($userType, $userEmail, $endpoint, $method, $status, $responseTime, $rateLimitHit = false, $userId = null): void
     {
         try {
             $db = \Config\Database::connect();
             
             $logData = [
-                'user_id' => $this->request->user_id ?? null,
-                'user_email' => $userEmail,
-                'user_type' => $userType,
+                'user_id' => $userId,
+                'user_email' => $userEmail !== 'unknown' ? $userEmail : null,
+                'user_type' => $userType !== 'unknown' ? $userType : null,
                 'endpoint' => $endpoint,
                 'method' => $method,
                 'status' => $status,
-                'response_time' => $responseTime . 'ms',
+                'response_time' => is_numeric($responseTime) ? $responseTime . 'ms' : $responseTime,
                 'ip' => $this->request->getIPAddress(),
                 'rate_limit_hit' => $rateLimitHit ? 1 : 0,
                 'timestamp' => date('Y-m-d H:i:s')
@@ -559,7 +559,7 @@ class ApiController extends BaseController
         // Validate request security
         if (!$this->validateRequestSecurity()) {
             $responseTime = round((microtime(true) - $startTime) * 1000);
-            $this->logApiRequest('unknown', 'unknown', '/api/v1/' . $userId . '/' . $fileId, 'GET', 400, $responseTime);
+            $this->logApiRequest('unknown', 'unknown', '/api/v1/' . $userId . '/' . $fileId, 'GET', 400, $responseTime, false, null);
             return $this->errorResponse('Security validation failed', 400);
         }
         
@@ -567,47 +567,48 @@ class ApiController extends BaseController
         $apiKey = $this->authenticateRequest();
         if (!$apiKey) {
             $responseTime = round((microtime(true) - $startTime) * 1000);
-            $this->logApiRequest('unknown', 'unknown', '/api/v1/' . $userId . '/' . $fileId, 'GET', 401, $responseTime);
+            $this->logApiRequest('unknown', 'unknown', '/api/v1/' . $userId . '/' . $fileId, 'GET', 401, $responseTime, false, null);
             return $this->errorResponse('Invalid or missing API key', 401);
         }
         
-        // Get user info for logging
+        // Validate parameters first (basic format check)
+        if (!$userId || !$fileId) {
+            $responseTime = round((microtime(true) - $startTime) * 1000);
+            $this->logApiRequest('unknown', 'unknown', '/api/v1/' . $userId . '/' . $fileId, 'GET', 400, $responseTime, false, null);
+            return $this->errorResponse('Missing user_id or file_id', 400);
+        }
+        
+        // Get user info for logging before validation (need for proper logging)
         $user = $this->userModel->find($apiKey['user_id']);
         $userType = $user['user_type'] ?? 'free';
         $userEmail = $user['email'] ?? 'unknown';
+        $actualUserId = $apiKey['user_id'];
+        
+        // Check if API key belongs to the requested user first (403 for wrong user)
+        if ($apiKey['user_id'] !== $userId) {
+            $responseTime = round((microtime(true) - $startTime) * 1000);
+            $this->logApiRequest($userType, $userEmail, '/api/v1/' . $userId . '/' . $fileId, 'GET', 403, $responseTime, false, $actualUserId);
+            return $this->errorResponse('API key does not have access to this user\'s data', 403);
+        }
+        
+        // Now validate parameter formats (after auth check for proper error codes)
+        if (!$this->validateUserId($userId)) {
+            $responseTime = round((microtime(true) - $startTime) * 1000);
+            $this->logApiRequest($userType, $userEmail, '/api/v1/' . $userId . '/' . $fileId, 'GET', 400, $responseTime, false, $actualUserId);
+            return $this->errorResponse('Invalid user_id format', 400);
+        }
+        
+        if (!$this->validateFileId($fileId)) {
+            $responseTime = round((microtime(true) - $startTime) * 1000);
+            $this->logApiRequest($userType, $userEmail, '/api/v1/' . $userId . '/' . $fileId, 'GET', 400, $responseTime, false, $actualUserId);
+            return $this->errorResponse('Invalid file_id format', 400);
+        }
         
         // Check rate limits
         $rateLimited = $this->checkRateLimit($userType, $this->request->getIPAddress());
         
         // Set rate limit headers
         $this->setRateLimitHeaders($userType, $this->request->getIPAddress());
-        
-        // Validate parameters
-        if (!$userId || !$fileId) {
-            $responseTime = round((microtime(true) - $startTime) * 1000);
-            $this->logApiRequest($userType, $userEmail, '/api/v1/' . $userId . '/' . $fileId, 'GET', 400, $responseTime);
-            return $this->errorResponse('Missing user_id or file_id', 400);
-        }
-        
-        // Validate parameter formats
-        if (!$this->validateUserId($userId)) {
-            $responseTime = round((microtime(true) - $startTime) * 1000);
-            $this->logApiRequest($userType, $userEmail, '/api/v1/' . $userId . '/' . $fileId, 'GET', 400, $responseTime);
-            return $this->errorResponse('Invalid user_id format', 400);
-        }
-        
-        if (!$this->validateFileId($fileId)) {
-            $responseTime = round((microtime(true) - $startTime) * 1000);
-            $this->logApiRequest($userType, $userEmail, '/api/v1/' . $userId . '/' . $fileId, 'GET', 400, $responseTime);
-            return $this->errorResponse('Invalid file_id format', 400);
-        }
-        
-        // Check if API key belongs to the requested user
-        if ($apiKey['user_id'] !== $userId) {
-            $responseTime = round((microtime(true) - $startTime) * 1000);
-            $this->logApiRequest($userType, $userEmail, '/api/v1/' . $userId . '/' . $fileId, 'GET', 403, $responseTime);
-            return $this->errorResponse('API key does not have access to this user\'s data', 403);
-        }
         
         try {
             // Get the JSON file
@@ -618,7 +619,7 @@ class ApiController extends BaseController
             
             if (!$file) {
                 $responseTime = round((microtime(true) - $startTime) * 1000);
-                $this->logApiRequest($userType, $userEmail, '/api/v1/' . $userId . '/' . $fileId, 'GET', 404, $responseTime);
+                $this->logApiRequest($userType, $userEmail, '/api/v1/' . $userId . '/' . $fileId, 'GET', 404, $responseTime, false, $actualUserId);
                 return $this->errorResponse('JSON file not found', 404);
             }
             
@@ -626,13 +627,13 @@ class ApiController extends BaseController
             $jsonContent = json_decode($file['json_content'], true);
             if (json_last_error() !== JSON_ERROR_NONE) {
                 $responseTime = round((microtime(true) - $startTime) * 1000);
-                $this->logApiRequest($userType, $userEmail, '/api/v1/' . $userId . '/' . $fileId, 'GET', 500, $responseTime);
+                $this->logApiRequest($userType, $userEmail, '/api/v1/' . $userId . '/' . $fileId, 'GET', 500, $responseTime, false, $actualUserId);
                 return $this->errorResponse('Invalid JSON content in file', 500);
             }
             
             // Success - log the request
             $responseTime = round((microtime(true) - $startTime) * 1000);
-            $this->logApiRequest($userType, $userEmail, '/api/v1/' . $userId . '/' . $fileId, 'GET', 200, $responseTime, $rateLimited);
+            $this->logApiRequest($userType, $userEmail, '/api/v1/' . $userId . '/' . $fileId, 'GET', 200, $responseTime, $rateLimited, $actualUserId);
             
             // Return the JSON data
             return $this->successResponse([
@@ -645,7 +646,7 @@ class ApiController extends BaseController
             
         } catch (\Exception $e) {
             $responseTime = round((microtime(true) - $startTime) * 1000);
-            $this->logApiRequest($userType, $userEmail, '/api/v1/' . $userId . '/' . $fileId, 'GET', 500, $responseTime);
+            $this->logApiRequest($userType, $userEmail, '/api/v1/' . $userId . '/' . $fileId, 'GET', 500, $responseTime, false, $actualUserId);
             return $this->errorResponse('Internal server error', 500);
         }
     }
@@ -663,7 +664,7 @@ class ApiController extends BaseController
         // Validate request security
         if (!$this->validateRequestSecurity()) {
             $responseTime = round((microtime(true) - $startTime) * 1000);
-            $this->logApiRequest('unknown', 'unknown', '/api/v1/' . $userId, 'GET', 400, $responseTime);
+            $this->logApiRequest('unknown', 'unknown', '/api/v1/' . $userId, 'GET', 400, $responseTime, false, null);
             return $this->errorResponse('Security validation failed', 400);
         }
         
@@ -671,41 +672,42 @@ class ApiController extends BaseController
         $apiKey = $this->authenticateRequest();
         if (!$apiKey) {
             $responseTime = round((microtime(true) - $startTime) * 1000);
-            $this->logApiRequest('unknown', 'unknown', '/api/v1/' . $userId, 'GET', 401, $responseTime);
+            $this->logApiRequest('unknown', 'unknown', '/api/v1/' . $userId, 'GET', 401, $responseTime, false, null);
             return $this->errorResponse('Invalid or missing API key', 401);
         }
         
-        // Get user info for logging
+        // Validate parameters first (basic format check)
+        if (!$userId) {
+            $responseTime = round((microtime(true) - $startTime) * 1000);
+            $this->logApiRequest('unknown', 'unknown', '/api/v1/' . $userId, 'GET', 400, $responseTime, false, null);
+            return $this->errorResponse('Missing user_id', 400);
+        }
+        
+        // Get user info for logging before validation (need for proper logging)
         $user = $this->userModel->find($apiKey['user_id']);
         $userType = $user['user_type'] ?? 'free';
         $userEmail = $user['email'] ?? 'unknown';
+        $actualUserId = $apiKey['user_id'];
+        
+        // Check if API key belongs to the requested user first (403 for wrong user)
+        if ($apiKey['user_id'] !== $userId) {
+            $responseTime = round((microtime(true) - $startTime) * 1000);
+            $this->logApiRequest($userType, $userEmail, '/api/v1/' . $userId, 'GET', 403, $responseTime, false, $actualUserId);
+            return $this->errorResponse('API key does not have access to this user\'s data', 403);
+        }
+        
+        // Now validate parameter format (after auth check for proper error codes)
+        if (!$this->validateUserId($userId)) {
+            $responseTime = round((microtime(true) - $startTime) * 1000);
+            $this->logApiRequest($userType, $userEmail, '/api/v1/' . $userId, 'GET', 400, $responseTime, false, $actualUserId);
+            return $this->errorResponse('Invalid user_id format', 400);
+        }
         
         // Check rate limits
         $rateLimited = $this->checkRateLimit($userType, $this->request->getIPAddress());
         
         // Set rate limit headers
         $this->setRateLimitHeaders($userType, $this->request->getIPAddress());
-        
-        // Validate parameters
-        if (!$userId) {
-            $responseTime = round((microtime(true) - $startTime) * 1000);
-            $this->logApiRequest($userType, $userEmail, '/api/v1/' . $userId, 'GET', 400, $responseTime);
-            return $this->errorResponse('Missing user_id', 400);
-        }
-        
-        // Validate parameter format
-        if (!$this->validateUserId($userId)) {
-            $responseTime = round((microtime(true) - $startTime) * 1000);
-            $this->logApiRequest($userType, $userEmail, '/api/v1/' . $userId, 'GET', 400, $responseTime);
-            return $this->errorResponse('Invalid user_id format', 400);
-        }
-        
-        // Check if API key belongs to the requested user
-        if ($apiKey['user_id'] !== $userId) {
-            $responseTime = round((microtime(true) - $startTime) * 1000);
-            $this->logApiRequest($userType, $userEmail, '/api/v1/' . $userId, 'GET', 403, $responseTime);
-            return $this->errorResponse('API key does not have access to this user\'s data', 403);
-        }
         
         try {
             // Get all JSON files for the user
@@ -726,7 +728,7 @@ class ApiController extends BaseController
             
             // Success - log the request
             $responseTime = round((microtime(true) - $startTime) * 1000);
-            $this->logApiRequest($userType, $userEmail, '/api/v1/' . $userId, 'GET', 200, $responseTime, $rateLimited);
+            $this->logApiRequest($userType, $userEmail, '/api/v1/' . $userId, 'GET', 200, $responseTime, $rateLimited, $actualUserId);
             
             return $this->successResponse([
                 'user_id' => $userId,
@@ -736,7 +738,7 @@ class ApiController extends BaseController
             
         } catch (\Exception $e) {
             $responseTime = round((microtime(true) - $startTime) * 1000);
-            $this->logApiRequest($userType, $userEmail, '/api/v1/' . $userId, 'GET', 500, $responseTime);
+            $this->logApiRequest($userType, $userEmail, '/api/v1/' . $userId, 'GET', 500, $responseTime, false, $actualUserId);
             return $this->errorResponse('Internal server error', 500);
         }
     }
@@ -749,43 +751,58 @@ class ApiController extends BaseController
     {
         // Setup API response with headers and timing
         $this->setupApiResponse();
+        $startTime = microtime(true);
         
         // Validate request security
         if (!$this->validateRequestSecurity()) {
+            $responseTime = round((microtime(true) - $startTime) * 1000);
+            $this->logApiRequest('unknown', 'unknown', '/api/v1/' . $userId . '/' . $fileId . '/raw', 'GET', 400, $responseTime, false, null);
             return $this->errorResponse('Security validation failed', 400);
         }
         
         // Authenticate request
         $apiKey = $this->authenticateRequest();
         if (!$apiKey) {
+            $responseTime = round((microtime(true) - $startTime) * 1000);
+            $this->logApiRequest('unknown', 'unknown', '/api/v1/' . $userId . '/' . $fileId . '/raw', 'GET', 401, $responseTime, false, null);
             return $this->errorResponse('Invalid or missing API key', 401);
         }
         
-        // Get user type for rate limit headers
-        $user = $this->userModel->find($apiKey['user_id']);
-        $userType = $user['user_type'] ?? 'free';
-        
-        // Set rate limit headers
-        $this->setRateLimitHeaders($userType, $this->request->getIPAddress());
-        
-        // Validate parameters
+        // Validate parameters first (basic format check)
         if (!$userId || !$fileId) {
+            $responseTime = round((microtime(true) - $startTime) * 1000);
+            $this->logApiRequest('unknown', 'unknown', '/api/v1/' . $userId . '/' . $fileId . '/raw', 'GET', 400, $responseTime, false, null);
             return $this->errorResponse('Missing user_id or file_id', 400);
         }
         
-        // Validate parameter formats
+        // Validate parameter formats before authentication (for proper 400 errors)
         if (!$this->validateUserId($userId)) {
+            $responseTime = round((microtime(true) - $startTime) * 1000);
+            $this->logApiRequest('unknown', 'unknown', '/api/v1/' . $userId . '/' . $fileId . '/raw', 'GET', 400, $responseTime, false, null);
             return $this->errorResponse('Invalid user_id format', 400);
         }
         
         if (!$this->validateFileId($fileId)) {
+            $responseTime = round((microtime(true) - $startTime) * 1000);
+            $this->logApiRequest('unknown', 'unknown', '/api/v1/' . $userId . '/' . $fileId . '/raw', 'GET', 400, $responseTime, false, null);
             return $this->errorResponse('Invalid file_id format', 400);
         }
         
-        // Check if API key belongs to the requested user
+        // Get user info for logging
+        $user = $this->userModel->find($apiKey['user_id']);
+        $userType = $user['user_type'] ?? 'free';
+        $userEmail = $user['email'] ?? 'unknown';
+        $actualUserId = $apiKey['user_id'];
+        
+        // Check if API key belongs to the requested user (403 for wrong user)
         if ($apiKey['user_id'] !== $userId) {
+            $responseTime = round((microtime(true) - $startTime) * 1000);
+            $this->logApiRequest($userType, $userEmail, '/api/v1/' . $userId . '/' . $fileId . '/raw', 'GET', 403, $responseTime, false, $actualUserId);
             return $this->errorResponse('API key does not have access to this user\'s data', 403);
         }
+        
+        // Set rate limit headers
+        $this->setRateLimitHeaders($userType, $this->request->getIPAddress());
         
         try {
             // Get the JSON file
@@ -795,17 +812,24 @@ class ApiController extends BaseController
                                   ->first();
             
             if (!$file) {
+                $responseTime = round((microtime(true) - $startTime) * 1000);
+                $this->logApiRequest($userType, $userEmail, '/api/v1/' . $userId . '/' . $fileId . '/raw', 'GET', 404, $responseTime, false, $actualUserId);
                 return $this->errorResponse('JSON file not found', 404);
             }
             
             // Validate JSON
             json_decode($file['json_content']);
             if (json_last_error() !== JSON_ERROR_NONE) {
+                $responseTime = round((microtime(true) - $startTime) * 1000);
+                $this->logApiRequest($userType, $userEmail, '/api/v1/' . $userId . '/' . $fileId . '/raw', 'GET', 500, $responseTime, false, $actualUserId);
                 return $this->errorResponse('Invalid JSON content in file', 500);
             }
             
+            // Success - log the request
+            $responseTime = round((microtime(true) - $startTime) * 1000);
+            $this->logApiRequest($userType, $userEmail, '/api/v1/' . $userId . '/' . $fileId . '/raw', 'GET', 200, $responseTime, false, $actualUserId);
+            
             // Return raw JSON with proper content type and headers
-            $responseTime = round((microtime(true) - $this->startTime) * 1000, 2);
             $this->response->setHeader('X-Response-Time', $responseTime . 'ms');
             $this->response->setHeader('Content-Disposition', 'inline; filename="' . $file['original_filename'] . '"');
             
@@ -814,6 +838,8 @@ class ApiController extends BaseController
                         ->setBody($file['json_content']);
                         
         } catch (\Exception $e) {
+            $responseTime = round((microtime(true) - $startTime) * 1000);
+            $this->logApiRequest($userType, $userEmail, '/api/v1/' . $userId . '/' . $fileId . '/raw', 'GET', 500, $responseTime, false, $actualUserId);
             return $this->errorResponse('Internal server error', 500);
         }
     }
@@ -826,6 +852,11 @@ class ApiController extends BaseController
     {
         // Setup API response with headers and timing
         $this->setupApiResponse();
+        $startTime = microtime(true);
+        
+        // Log the info request
+        $responseTime = round((microtime(true) - $startTime) * 1000);
+        $this->logApiRequest('public', 'public', '/api/v1/info', 'GET', 200, $responseTime, false, null);
         
         return $this->successResponse([
             'name' => 'RioConsoleJSON API',
@@ -865,6 +896,11 @@ class ApiController extends BaseController
     {
         // Setup API response with headers and timing
         $this->setupApiResponse();
+        $startTime = microtime(true);
+        
+        // Log the health check request
+        $responseTime = round((microtime(true) - $startTime) * 1000);
+        $this->logApiRequest('public', 'public', '/api/v1/health', 'GET', 200, $responseTime, false, null);
         
         return $this->successResponse([
             'status' => 'healthy',
@@ -892,5 +928,33 @@ class ApiController extends BaseController
         return $this->response
             ->setStatusCode(200)
             ->setBody(''); // Empty body for preflight
+    }
+
+    /**
+     * Handle API root requests (missing user_id)
+     * GET /api/v1/ or GET /api/v1
+     */
+    public function apiRoot()
+    {
+        // Setup API response with headers and timing
+        $this->setupApiResponse();
+        $startTime = microtime(true);
+        
+        // This endpoint requires authentication to determine if it's a 400 or 401 error
+        $apiKey = $this->authenticateRequest();
+        if (!$apiKey) {
+            $responseTime = round((microtime(true) - $startTime) * 1000);
+            $this->logApiRequest('unknown', 'unknown', '/api/v1/', 'GET', 401, $responseTime, false, null);
+            return $this->errorResponse('Invalid or missing API key', 401);
+        }
+        
+        // If authenticated but missing user_id parameter, return 400
+        $responseTime = round((microtime(true) - $startTime) * 1000);
+        $user = $this->userModel->find($apiKey['user_id']);
+        $userType = $user['user_type'] ?? 'free';
+        $userEmail = $user['email'] ?? 'unknown';
+        
+        $this->logApiRequest($userType, $userEmail, '/api/v1/', 'GET', 400, $responseTime, false, $apiKey['user_id']);
+        return $this->errorResponse('Missing user_id parameter. Expected format: /api/v1/{user_id}', 400);
     }
 }

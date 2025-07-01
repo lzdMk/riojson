@@ -234,8 +234,8 @@
 
             const requestsHtml = requests.map(request => {
                 const userTypeBadge = getUserTypeBadge(request.user_type);
-                const statusBadge = getStatusBadge(request.response_code);
-                const timeAgo = getTimeAgo(request.request_time);
+                const statusBadge = getStatusBadge(request.status);
+                const timeAgo = getTimeAgo(request.timestamp);
                 
                 return `
                     <div class="request-item">
@@ -248,10 +248,16 @@
                                 </div>
                                 <div class="d-flex align-items-center text-muted small">
                                     <i class="bi bi-person me-1"></i>
-                                    <span class="me-3">${request.user_id || 'Anonymous'}</span>
+                                    <span class="me-3">${getUserDisplayName(request)}</span>
                                     ${userTypeBadge}
                                     <span class="ms-3">
-                                        <i class="bi bi-globe me-1"></i>${request.ip_address || 'N/A'}
+                                        <i class="bi bi-envelope me-1"></i>${getUserEmailDisplay(request)}
+                                    </span>
+                                    <span class="ms-3">
+                                        <i class="bi bi-globe me-1"></i>${request.ip || 'N/A'}
+                                    </span>
+                                    <span class="ms-3">
+                                        <i class="bi bi-clock me-1"></i>${request.response_time || 'N/A'}
                                     </span>
                                 </div>
                             </div>
@@ -270,9 +276,28 @@
             const badges = {
                 'free': '<span class="badge bg-success user-type-badge">Free</span>',
                 'paid': '<span class="badge bg-warning user-type-badge">Paid</span>',
-                'admin': '<span class="badge bg-danger user-type-badge">Admin</span>'
+                'admin': '<span class="badge bg-danger user-type-badge">Admin</span>',
+                'public': '<span class="badge bg-info user-type-badge">Public</span>'
             };
             return badges[userType] || '<span class="badge bg-secondary user-type-badge">Unknown</span>';
+        }
+
+        function getUserDisplayName(request) {
+            // Check if this is a public endpoint
+            if (request.user_type === 'public' || request.user_email === 'public') {
+                return 'Public';
+            }
+            
+            return request.user_id || 'Anonymous';
+        }
+
+        function getUserEmailDisplay(request) {
+            // Check if this is a public endpoint
+            if (request.user_type === 'public' || request.user_email === 'public') {
+                return 'Public API';
+            }
+            
+            return request.user_email || 'N/A';
         }
 
         function getStatusBadge(code) {
@@ -289,14 +314,28 @@
         }
 
         function getTimeAgo(timestamp) {
-            const now = new Date();
-            const requestTime = new Date(timestamp);
-            const diffInSeconds = Math.floor((now - requestTime) / 1000);
+            if (!timestamp) return 'N/A';
             
-            if (diffInSeconds < 60) return `${diffInSeconds}s ago`;
-            if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
-            if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
-            return `${Math.floor(diffInSeconds / 86400)}d ago`;
+            try {
+                const now = new Date();
+                const requestTime = new Date(timestamp);
+                
+                // Check if date is valid
+                if (isNaN(requestTime.getTime())) {
+                    return 'Invalid date';
+                }
+                
+                const diffInSeconds = Math.floor((now - requestTime) / 1000);
+                
+                if (diffInSeconds < 0) return 'Just now';
+                if (diffInSeconds < 60) return `${diffInSeconds}s ago`;
+                if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+                if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+                return `${Math.floor(diffInSeconds / 86400)}d ago`;
+            } catch (error) {
+                console.error('Error parsing timestamp:', timestamp, error);
+                return 'Invalid date';
+            }
         }
 
         function clearRequests() {
