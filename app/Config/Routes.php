@@ -67,10 +67,21 @@ $routes->group('api/v1', ['namespace' => 'App\Controllers'], function($routes) {
     $routes->get('info', 'ApiController::info');
     $routes->get('health', 'ApiController::health');
     
-    // User JSON files endpoints
-    $routes->get('([a-zA-Z0-9]+)', 'ApiController::getUserFiles/$1');
-    $routes->get('([a-zA-Z0-9]+)/([a-zA-Z0-9\-]+)', 'ApiController::getJsonFile/$1/$2');
-    $routes->get('([a-zA-Z0-9]+)/([a-zA-Z0-9\-]+)/raw', 'ApiController::getRawJson/$1/$2');
+    // Handle API root path (missing parameters) - must be before the user routes
+    $routes->get('/', 'ApiController::apiRoot');
+    
+    // CORS preflight support for all API endpoints
+    $routes->options('info', 'ApiController::options');
+    $routes->options('health', 'ApiController::options');
+    $routes->options('/', 'ApiController::options');
+    $routes->options('([a-zA-Z0-9]+)', 'ApiController::options');
+    $routes->options('([a-zA-Z0-9]+)/([a-zA-Z0-9\-]+)', 'ApiController::options');
+    $routes->options('([a-zA-Z0-9]+)/([a-zA-Z0-9\-]+)/raw', 'ApiController::options');
+    
+    // User JSON files endpoints (allow more flexible user IDs)
+    $routes->get('([a-zA-Z0-9_]+)', 'ApiController::getUserFiles/$1');
+    $routes->get('([a-zA-Z0-9_]+)/([a-zA-Z0-9\-_]+)', 'ApiController::getJsonFile/$1/$2');
+    $routes->get('([a-zA-Z0-9_]+)/([a-zA-Z0-9\-_]+)/raw', 'ApiController::getRawJson/$1/$2');
 });
 
 // Legacy routes for compatibility

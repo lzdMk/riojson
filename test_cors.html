@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CORS Test for RioJSON API</title>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            max-width: 800px; 
+            margin: 0 auto; 
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #2c3e50; }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 3px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        .headers-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        .headers-table th, .headers-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .headers-table th {
+            background-color: #f8f9fa;
+        }
+        .copy-btn {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            margin: 2px;
+            transition: background-color 0.3s;
+        }
+        .copy-btn:hover {
+            background-color: #5a6268;
+        }
+        .guide-section {
+            background-color: #e7f3ff;
+            border-color: #b3d9ff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 RioJSON API CORS & Headers Test</h1>
+        <p>This page tests CORS functionality and displays security headers from your RioJSON API.</p>
+        
+        <div class="test-section guide-section">
+            <h3>🌐 API Configuration</h3>
+            <form id="api-base-form" onsubmit="event.preventDefault(); setApiBaseUrl();">
+                <label for="api-base-input"><strong>API Base URL:</strong></label>
+                <input type="text" id="api-base-input" style="width: 350px; padding: 8px; margin: 5px;" placeholder="e.g. https://api.example.com/riojson">
+                <button type="submit">Set Base URL</button>
+            </form>
+            <p><strong>Current API Base URL:</strong> <span id="api-base-display"></span></p>
+            <button onclick="testConnection()">🔗 Test API Connection</button>
+            <div id="connection-result" class="result"></div>
+        </div>
+        <p><strong>API Base URL:</strong> <code id="api-base-display"></code></p>
+        
+        <div class="test-section guide-section">
+            <h3>📖 API Endpoint Guide</h3>
+            <p><strong>Available Endpoints:</strong></p>
+            <ul>
+                <li><code>GET /api/v1/health</code> - Health check (no auth required)</li>
+                <li><code>GET /api/v1/info</code> - API information (no auth required)</li>
+                <li><code>GET /api/v1/{user_id}</code> - Get all files for user (auth required)</li>
+                <li><code>GET /api/v1/{user_id}/{file_id}</code> - Get specific file with metadata (auth required)</li>
+                <li><code>GET /api/v1/{user_id}/{file_id}/raw</code> - Get raw JSON content (auth required)</li>
+                <li><code>OPTIONS /api/v1/*</code> - CORS preflight support</li>
+            </ul>
+            <p><strong>Format Requirements:</strong></p>
+            <ul>
+                <li><strong>User ID:</strong> 6 alphanumeric characters (e.g., <code>abc123</code>)</li>
+                <li><strong>File ID:</strong> 11 alphanumeric characters with hyphens (e.g., <code>abc123-def45</code>)</li>
+                <li><strong>API Key:</strong> Your generated API key from the dashboard</li>
+            </ul>
+        </div>
+        
+        <div class="test-section">
+            <h3>📡 API Health Check</h3>
+            <button onclick="testHealth()">Test /api/v1/health</button>
+            <div id="health-result" class="result"></div>
+            <div id="health-headers"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📋 API Info</h3>
+            <button onclick="testInfo()">Test /api/v1/info</button>
+            <div id="info-result" class="result"></div>
+            <div id="info-headers"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>✈️ CORS Preflight Test</h3>
+            <button onclick="testPreflight()">Test OPTIONS Request</button>
+            <div id="preflight-result" class="result"></div>
+            <div id="preflight-headers"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>🔐 User Files List Test</h3>
+            <input type="text" id="api-key" placeholder="Enter your API key" style="width: 300px; padding: 8px; margin: 5px;">
+            <input type="text" id="user-id" placeholder="User ID (e.g., abc123)" style="width: 150px; padding: 8px; margin: 5px;">
+            <br>
+            <button onclick="testUserFiles()">Test Get User Files</button>
+            <div id="user-files-result" class="result"></div>
+            <div id="user-files-headers"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📄 Specific File Test</h3>
+            <input type="text" id="api-key-file" placeholder="Enter your API key" style="width: 300px; padding: 8px; margin: 5px;">
+            <input type="text" id="user-id-file" placeholder="User ID (e.g., abc123)" style="width: 150px; padding: 8px; margin: 5px;">
+            <input type="text" id="file-id" placeholder="File ID (e.g., abc123-def45)" style="width: 200px; padding: 8px; margin: 5px;">
+            <br>
+            <button onclick="testSpecificFile()">Test Get Specific File</button>
+            <button onclick="testRawFile()">Test Get Raw JSON</button>
+            <div id="file-result" class="result"></div>
+            <div id="file-headers"></div>
+        </div>
+    </div>
+
+    <script>
+        // API Base URL logic with localStorage
+        function getApiBaseUrl() {
+            return localStorage.getItem('riojson_api_base') || 'http://localhost/riojson';
+        }
+
+        function setApiBaseUrl() {
+            const input = document.getElementById('api-base-input').value.trim();
+            if (input) {
+                localStorage.setItem('riojson_api_base', input);
+                updateApiBaseDisplay();
+            }
+        }
+
+        function updateApiBaseDisplay() {
+            const base = getApiBaseUrl();
+            document.getElementById('api-base-display').textContent = base;
+            document.getElementById('api-base-input').value = base;
+        }
+
+        let API_BASE = getApiBaseUrl();
+
+        // Watch for changes to base URL
+        function refreshApiBase() {
+            API_BASE = getApiBaseUrl();
+        }
+
+        function displayResult(elementId, data, isError = false) {
+            const element = document.getElementById(elementId);
+            element.className = `result ${isError ? 'error' : 'success'}`;
+            
+            if (typeof data === 'object') {
+                element.textContent = JSON.stringify(data, null, 2);
+                
+                // If this is a user files response with file data, add quick copy buttons
+                if (elementId === 'user-files-result' && data.success && data.data && data.data.files) {
+                    const fileList = data.data.files;
+                    if (fileList.length > 0) {
+                        element.innerHTML = element.textContent + 
+                            `<br><br><strong>📋 Quick File ID Copy:</strong><br>` +
+                            fileList.map(file => 
+                                `<button onclick="copyFileId('${file.file_id}')" class="copy-btn">
+                                    Copy ${file.file_id} (${file.filename})
+                                </button>`
+                            ).join('<br>');
+                    }
+                }
+            } else {
+                element.textContent = data;
+            }
+        }
+
+        function copyFileId(fileId) {
+            document.getElementById('file-id').value = fileId;
+            // Also copy the API key and user ID if they exist
+            const apiKey = document.getElementById('api-key').value;
+            const userId = document.getElementById('user-id').value;
+            if (apiKey) document.getElementById('api-key-file').value = apiKey;
+            if (userId) document.getElementById('user-id-file').value = userId;
+            
+            // Show a brief success message
+            const button = event.target;
+            const originalText = button.textContent;
+            button.textContent = '✅ Copied!';
+            button.style.backgroundColor = '#28a745';
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.style.backgroundColor = '#007bff';
+            }, 1500);
+        }
+
+        function displayHeaders(elementId, response) {
+            const headersDiv = document.getElementById(elementId);
+            let headersHtml = '<h4>📋 Response Headers:</h4><table class="headers-table"><tr><th>Header</th><th>Value</th></tr>';
+            
+            for (let [key, value] of response.headers.entries()) {
+                // Highlight security and CORS headers
+                const isImportant = key.toLowerCase().includes('access-control') || 
+                                  key.toLowerCase().includes('x-') || 
+                                  key.toLowerCase().includes('api') ||
+                                  key.toLowerCase().includes('content-security-policy') ||
+                                  key.toLowerCase().includes('strict-transport-security');
+                const style = isImportant ? 'background-color: #fff3cd; font-weight: bold;' : '';
+                headersHtml += `<tr style="${style}"><td>${key}</td><td>${value}</td></tr>`;
+            }
+            headersHtml += '</table>';
+            headersDiv.innerHTML = headersHtml;
+        }
+
+        async function testHealth() {
+            refreshApiBase();
+            const url = `${API_BASE}/api/v1/health`;
+            console.log('Testing URL:', url);
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                    }
+                });
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                const data = await response.json();
+                displayResult('health-result', data);
+                displayHeaders('health-headers', response);
+            } catch (error) {
+                console.error('Health test error:', error);
+                displayResult('health-result', `Error: ${error.message}\nURL tested: ${url}`, true);
+            }
+        }
+
+        async function testInfo() {
+            refreshApiBase();
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/info`, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                    }
+                });
+                const data = await response.json();
+                displayResult('info-result', data);
+                displayHeaders('info-headers', response);
+            } catch (error) {
+                displayResult('info-result', `Error: ${error.message}`, true);
+            }
+        }
+
+        async function testPreflight() {
+            refreshApiBase();
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/info`, {
+                    method: 'OPTIONS',
+                    headers: {
+                        'Access-Control-Request-Method': 'GET',
+                        'Access-Control-Request-Headers': 'Authorization, Content-Type',
+                        'Origin': window.location.origin
+                    }
+                });
+                displayResult('preflight-result', `Status: ${response.status} ${response.statusText}\nPreflight successful!`);
+                displayHeaders('preflight-headers', response);
+            } catch (error) {
+                displayResult('preflight-result', `Error: ${error.message}`, true);
+            }
+        }
+
+        async function testUserFiles() {
+            refreshApiBase();
+            const apiKey = document.getElementById('api-key').value;
+            const userId = document.getElementById('user-id').value;
+            if (!apiKey || !userId) {
+                displayResult('user-files-result', 'Please enter both API key and User ID', true);
+                return;
+            }
+            const url = `${API_BASE}/api/v1/${userId}`;
+            console.log('Testing URL:', url);
+            console.log('API Key:', apiKey);
+            console.log('User ID:', userId);
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                });
+                console.log('Response status:', response.status);
+                console.log('Response content type:', response.headers.get('content-type'));
+                const data = await response.json();
+                displayResult('user-files-result', data, !response.ok);
+                displayHeaders('user-files-headers', response);
+            } catch (error) {
+                console.error('User files test error:', error);
+                displayResult('user-files-result', `Error: ${error.message}\nURL tested: ${url}`, true);
+            }
+        }
+
+        async function testSpecificFile() {
+            refreshApiBase();
+            const apiKey = document.getElementById('api-key-file').value;
+            const userId = document.getElementById('user-id-file').value;
+            const fileId = document.getElementById('file-id').value;
+            if (!apiKey || !userId || !fileId) {
+                displayResult('file-result', 'Please enter API key, User ID, and File ID', true);
+                return;
+            }
+            const url = `${API_BASE}/api/v1/${userId}/${fileId}`;
+            console.log('Testing URL:', url);
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                });
+                console.log('Response status:', response.status);
+                const data = await response.json();
+                displayResult('file-result', data, !response.ok);
+                displayHeaders('file-headers', response);
+            } catch (error) {
+                console.error('Specific file test error:', error);
+                displayResult('file-result', `Error: ${error.message}\nURL tested: ${url}`, true);
+            }
+        }
+
+        async function testRawFile() {
+            refreshApiBase();
+            const apiKey = document.getElementById('api-key-file').value;
+            const userId = document.getElementById('user-id-file').value;
+            const fileId = document.getElementById('file-id').value;
+            if (!apiKey || !userId || !fileId) {
+                displayResult('file-result', 'Please enter API key, User ID, and File ID', true);
+                return;
+            }
+            const url = `${API_BASE}/api/v1/${userId}/${fileId}/raw`;
+            console.log('Testing URL:', url);
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Accept': 'application/json'
+                    }
+                });
+                console.log('Response status:', response.status);
+                // For raw endpoint, we get the JSON directly
+                const data = await response.text();
+                let parsedData;
+                try {
+                    parsedData = JSON.parse(data);
+                    displayResult('file-result', `Raw JSON Response:\n${JSON.stringify(parsedData, null, 2)}`, !response.ok);
+                } catch {
+                    displayResult('file-result', `Raw Response:\n${data}`, !response.ok);
+                }
+                displayHeaders('file-headers', response);
+            } catch (error) {
+                console.error('Raw file test error:', error);
+                displayResult('file-result', `Error: ${error.message}\nURL tested: ${url}`, true);
+            }
+        }
+
+        // Auto-setup on page load
+        window.onload = function() {
+            updateApiBaseDisplay();
+            testHealth();
+        };
+    </script>
+</body>
+</html>

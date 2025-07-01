@@ -34,7 +34,7 @@ class Cors extends BaseConfig
          *   - ['http://localhost:8080']
          *   - ['https://www.example.com']
          */
-        'allowedOrigins' => [],
+        'allowedOrigins' => ['*'],
 
         /**
          * Origin regex patterns for the `Access-Control-Allow-Origin` header.
@@ -68,7 +68,18 @@ class Cors extends BaseConfig
          *
          * @see https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Access-Control-Allow-Headers
          */
-        'allowedHeaders' => [],
+        'allowedHeaders' => [
+            'Authorization',
+            'Content-Type',
+            'X-Requested-With',
+            'Accept',
+            'Origin',
+            'Access-Control-Request-Method',
+            'Access-Control-Request-Headers',
+            'X-API-Key',
+            'Cache-Control',
+            'Content-Length'
+        ],
 
         /**
          * Set headers to expose.
@@ -79,7 +90,20 @@ class Cors extends BaseConfig
          *
          * @see https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Access-Control-Expose-Headers
          */
-        'exposedHeaders' => [],
+        'exposedHeaders' => [
+            'X-RateLimit-Remaining-Hourly',
+            'X-RateLimit-Limit-Hourly',
+            'X-RateLimit-Remaining-Burst',
+            'X-RateLimit-Limit-Burst',
+            'X-RateLimit-Reset-Hourly',
+            'X-RateLimit-Reset-Burst',
+            'API-Version',
+            'Content-Length',
+            'Content-Type',
+            'X-Response-Time',
+            'Server-Timing',
+            'X-API-RateLimit-Policy'
+        ],
 
         /**
          * Set methods to allow.
@@ -93,13 +117,20 @@ class Cors extends BaseConfig
          *
          * @see https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Access-Control-Allow-Methods
          */
-        'allowedMethods' => [],
+        'allowedMethods' => [
+            'GET',
+            'POST',
+            'PUT',
+            'DELETE',
+            'OPTIONS',
+            'HEAD'
+        ],
 
         /**
          * Set how many seconds the results of a preflight request can be cached.
          *
          * @see https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Access-Control-Max-Age
          */
-        'maxAge' => 7200,
+        'maxAge' => 86400, // 24 hours for better performance
     ];
 }
